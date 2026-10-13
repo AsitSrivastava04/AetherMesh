@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+
+  <!-- SEO / PWA Meta -->
+  <title>Aether Mesh — Air-Gapped Disaster P2P Network</title>
+  <meta name="description" content="Zero-install, air-gapped, peer-to-peer disaster communications mesh network operating entirely inside standard web browsers via WebRTC." />
+  <meta name="theme-color" content="#00d4aa" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Aether Mesh" />
+
+  <!-- PWA Manifest -->
+  <link rel="manifest" href="/manifest.json" />
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23040d1a' stroke='%2300d4aa' stroke-width='2'/%3E%3Ccircle cx='16' cy='8' r='3' fill='%2300d4aa'/%3E%3Ccircle cx='6' cy='24' r='3' fill='%2300d4aa'/%3E%3Ccircle cx='26' cy='24' r='3' fill='%2300d4aa'/%3E%3Cline x1='16' y1='11' x2='6' y2='21' stroke='%2300d4aa' stroke-width='1.5'/%3E%3Cline x1='16' y1='11' x2='26' y2='21' stroke='%2300d4aa' stroke-width='1.5'/%3E%3Cline x1='9' y1='24' x2='23' y2='24' stroke='%2300d4aa' stroke-width='1.5'/%3E%3C/svg%3E" />
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="/style.css" />
+
+  <!-- CDN Libraries -->
+  <script src="https://unpkg.com/dexie@3.2.4/dist/dexie.min.js" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js" crossorigin="anonymous"></script>
+</head>
+
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     LOADING OVERLAY
+     ═══════════════════════════════════════════════════════ -->
+<div id="loading-overlay">
+  <div class="loading-title">AETHER MESH</div>
+  <div class="loading-spinner"></div>
+  <div class="loading-status" id="loading-status">INITIALISING NODE…</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     APPLICATION HEADER
+     ═══════════════════════════════════════════════════════ -->
+<header id="app-header" role="banner">
+  <div class="header-brand">
+    <div class="brand-icon" aria-hidden="true">⬡</div>
+    <div class="brand-text">
+      <div class="brand-name">AETHER MESH</div>
+      <div class="brand-sub">AIR-GAPPED DISASTER P2P NETWORK</div>
+    </div>
+  </div>
+
+  <div class="header-status" role="status" aria-label="Network status">
+    <!-- Local Node ID -->
+    <div class="status-pill node-pill" title="This node's unique identifier">
+      <span class="pill-label">NODE</span>
+      <span class="pill-value node-id" id="node-id">—</span>
+    </div>
+
+    <!-- Degree count -->
+    <div class="status-pill degree-pill" title="Active WebRTC peers (K=3 max)">
+      <span class="pill-label">DEGREE</span>
+      <span class="pill-value" id="degree-count">0 / 3</span>
+    </div>
+
+    <!-- Network state -->
+    <div class="status-pill desktop-only" title="Mesh connectivity state">
+      <span class="pill-label">MESH</span>
+      <span class="pill-value" id="net-state" style="color:#888">⬤ OFFLINE</span>
+    </div>
+
+    <!-- Screen Wake Lock -->
+    <div class="status-pill desktop-only" title="Screen Wake Lock">
+      <span class="pill-label">WAKE</span>
+      <span class="pill-value" id="wakelock-state">⏳ …</span>
+    </div>
+
+    <!-- Signaling state -->
+    <div class="status-pill desktop-only" title="LAN signaling server connection">
+      <span class="pill-label">SIG</span>
+      <span class="pill-value" id="sig-state">⏳ …</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════════════════════════════════════════════════
+     MOBILE NAVIGATION BAR (Visible on phones & small screens)
+     ═══════════════════════════════════════════════════════ -->
+<nav id="mobile-nav" class="mobile-nav-bar" aria-label="Mobile Navigation">
+  <button class="mobile-tab-btn active" id="mob-tab-chat" data-view="chat" type="button">
+    💬 CHAT <span id="chat-unread-dot" class="unread-dot hidden"></span>
+  </button>
+  <button class="mobile-tab-btn" id="mob-tab-topo" data-view="topology" type="button">
+    ◈ TOPOLOGY
+  </button>
+  <button class="mobile-tab-btn" id="mob-tab-telemetry" data-view="telemetry" type="button">
+    📊 TELEMETRY
+  </button>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════
+     MAIN BODY (Default mobile view is "chat")
+     ═══════════════════════════════════════════════════════ -->
+<main id="app-body" data-mobile-view="chat" role="main">
+
+  <!-- ── TOPOLOGY GRAPH PANEL ── -->
+  <section id="topology-panel" class="panel" aria-label="Live mesh topology">
+    <div class="panel-header">
+      <span class="panel-title">◈ LIVE TOPOLOGY — K=3 BOUNDED OVERLAY</span>
+      <div class="panel-actions">
+        <span class="panel-badge" id="topo-badge">RTT LABELS</span>
+        <div class="zoom-controls">
+          <button id="zoom-in-btn" class="mini-btn" title="Zoom in" type="button">+</button>
+          <button id="zoom-out-btn" class="mini-btn" title="Zoom out" type="button">−</button>
+          <button id="zoom-fit-btn" class="mini-btn" title="Reset view" type="button">⊙</button>
+        </div>
+      </div>
+    </div>
+    <div class="panel-content" style="flex:1; display:flex; flex-direction:column; min-height:0; position:relative;">
+      <div id="topology-canvas" role="img" aria-label="Mesh network topology visualization"></div>
+    </div>
+  </section>
+
+  <!-- ── SIDEBAR (Chat Terminal & Telemetry) ── -->
+  <aside id="sidebar" class="panel" aria-label="Communications and telemetry">
+    
+    <!-- Desktop Sidebar Tabs (Hidden on mobile where mobile-nav is used) -->
+    <div class="sidebar-tabs desktop-tabs" role="tablist">
+      <button class="sidebar-tab active" id="tab-chat-btn" role="tab" aria-selected="true" type="button">
+        💬 CHAT TERMINAL
+      </button>
+      <button class="sidebar-tab" id="tab-telemetry-btn" role="tab" aria-selected="false" type="button">
+        📊 TELEMETRY &amp; DTN
+      </button>
+    </div>
+
+    <!-- Quick Glance Status Strip -->
+    <div class="quick-glance-bar" id="quick-glance" title="Click to view telemetry">
+      <div class="glance-item">
+        <span class="glance-lbl">DTN:</span>
+        <span class="glance-val" id="quick-dtn-text">0/50</span>
+        <div class="glance-mini-track"><div id="quick-dtn-bar"></div></div>
+      </div>
+      <div class="glance-sep">|</div>
+      <div class="glance-item">
+        <span class="glance-lbl">VC:</span>
+        <span class="glance-val" id="quick-vc-text">0</span>
+      </div>
+      <div class="glance-sep">|</div>
+      <div class="glance-item">
+        <span class="glance-lbl">PEERS:</span>
+        <span class="glance-val" id="quick-peers-text">0/3</span>
+      </div>
+    </div>
+
+    <!-- ── TAB 1: Chat Terminal ── -->
+    <div id="chat-panel-container" class="sidebar-tab-content active-tab-content">
+        <!-- Partition Alert Banner (Visible when partition is ON) -->
+        <div id="partition-alert-banner" class="partition-banner hidden">
+          <span class="banner-icon">⚠️</span>
+          <div class="banner-text">
+            <strong>PARTITION ACTIVE (MULE MODE)</strong>
+            <span>Device is in an isolated disaster pocket. Direct P2P transmission is paused. Outgoing messages are stored locally in DTN IndexedDB. Toggle OFF or reconnect to flush.</span>
+          </div>
+        </div>
+
+        <!-- Message Feed (Internally scrollable) -->
+        <div id="chat-feed" role="log" aria-live="polite" aria-label="Chat messages">
+          <!-- Messages dynamically injected -->
+        </div>
+
+        <!-- Chat Controls (ALWAYS PINNED AT BOTTOM) -->
+        <div id="chat-controls">
+          <div id="chat-controls-top">
+            <select id="dest-select" aria-label="Message destination" title="Select recipient">
+              <option value="BROADCAST">📡 ALL</option>
+            </select>
+            <textarea
+              id="chat-input"
+              rows="1"
+              maxlength="2048"
+              placeholder="Type message… (Enter to send)"
+              aria-label="Chat message input"
+            ></textarea>
+            <button id="send-btn" type="button" aria-label="Send message">SEND</button>
+          </div>
+
+          <div class="partition-row">
+            <span class="toggle-label">PARTITION TEST</span>
+            <label class="toggle-switch" title="Simulate network partition (store-and-forward mode)">
+              <input type="checkbox" id="partition-toggle" aria-label="Toggle network partition simulation" />
+              <span class="toggle-slider"></span>
+            </label>
+            <span id="partition-label" style="color: #00d4aa;">🟢 Network Normal</span>
+            <button id="partition-help-btn" class="partition-help-btn" type="button" title="How the Partition Test works">? How it works</button>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── TAB 2: Telemetry & DTN ── -->
+    <div id="telemetry-panel-container" class="sidebar-tab-content">
+      <section id="telemetry-panel" aria-label="System telemetry">
+        <div class="telemetry-content">
+          <!-- DTN Buffer Gauge -->
+          <div class="telemetry-block" aria-label="DTN buffer utilization">
+            <div class="gauge-label">
+              <span>DTN MULE BUFFER</span>
+              <span id="dtn-pct" class="accent">0%</span>
+            </div>
+            <div class="gauge-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="DTN buffer">
+              <div id="dtn-bar"></div>
+            </div>
+            <div class="gauge-meta" id="dtn-count">0 / 50 bundles stored</div>
+          </div>
+
+          <!-- Active Peers -->
+          <div class="telemetry-block" aria-label="Active peer connections">
+            <div class="section-label">ACTIVE MESH PEERS (K=3)</div>
+            <div id="peer-list">
+              <span class="muted">No peers connected</span>
+            </div>
+          </div>
+
+          <!-- Vector Clock -->
+          <div class="telemetry-block" aria-label="Vector clock state">
+            <div class="section-label">VECTOR CLOCK (CRDT STATE)</div>
+            <div id="vc-display" aria-live="polite">
+              <span class="muted">awaiting peers…</span>
+            </div>
+          </div>
+
+          <!-- Peer Routing Table -->
+          <div class="telemetry-block" aria-label="Peer routing table">
+            <div class="section-label">NEXT-HOP ROUTING TABLE</div>
+            <div id="route-table-wrap">
+              <table id="route-table" aria-label="Routing table">
+                <tr><td colspan="2" class="muted">No routes discovered</td></tr>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  </aside>
+
+  <!-- ── STATUS BAR (Desktop bottom) ── -->
+  <footer id="status-bar" role="contentinfo" aria-label="System status">
+    <div class="status-item">
+      <div class="status-dot" id="status-dot-main"></div>
+      <span>AETHER MESH ONLINE</span>
+    </div>
+    <div class="status-item">
+      <span>DTN ENGINE: ACTIVE</span>
+    </div>
+    <div class="status-item">
+      <span>CRDT: DELTA-LWW</span>
+    </div>
+    <div class="status-item">
+      <span>OVERLAY: K=3 BOUNDED</span>
+    </div>
+    <span class="ver-tag">PWA v1.0.4</span>
+  </footer>
+
+</main>
+
+<!-- ═══════════════════════════════════════════════════════
+     MODULE SCRIPTS
+     ═══════════════════════════════════════════════════════ -->
+<script src="/js/dtn-storage.js"></script>
+<script src="/js/peer-manager.js"></script>
+<script src="/js/router.js"></script>
+<script src="/js/app.js"></script>
+
+<!-- Loading overlay dismiss -->
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(() => {
+      const overlay = document.getElementById('loading-overlay');
+      if (overlay) overlay.classList.add('hidden');
+      setTimeout(() => {
+        if (overlay) overlay.remove();
+      }, 500);
+    }, 1200);
+  });
+</script>
+
+<!-- ═══════════════════════════════════════════════════════
+     PARTITION & MULTI-HOP EXPLANATION MODAL
+     ═══════════════════════════════════════════════════════ -->
+<div id="partition-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 id="modal-title">📦 Understanding Partition Testing &amp; Multi-Hop DTN</h3>
+      <button id="close-partition-modal" class="close-btn" type="button" aria-label="Close modal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="concept-callout">
+        <strong>The Disaster Scenario:</strong>
+        When cell towers and internet fall silent, networks fracture into isolated islands (partitions).
+        Aether Mesh uses <strong>Delay-Tolerant Networking (DTN)</strong> so each phone or laptop acts as a <em>Data Mule</em>—storing messages locally in IndexedDB and automatically carrying &amp; offloading them when peers re-enter range.
+      </div>
+
+      <div class="guide-steps">
+        <div class="step-card">
+          <div class="step-num">1</div>
+          <div class="step-content">
+            <h4>Simulate an Isolated Island (Partition ON)</h4>
+            <p>Flip the <strong>PARTITION TEST</strong> toggle <strong>ON</strong> on your device. Direct WebRTC transmissions are paused, simulating stepping outside wireless range.</p>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num">2</div>
+          <div class="step-content">
+            <h4>Send Disaster Dispatches (Store in IndexedDB)</h4>
+            <p>Type a message and click <strong>SEND</strong>. Notice the badge says <span class="dtn-tag">⏳ DTN Buffered</span>. Messages are safely preserved in browser IndexedDB even if the page refreshes!</p>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num">3</div>
+          <div class="step-content">
+            <h4>Rejoin the Mesh (Instant Auto-Flush)</h4>
+            <p>Flip <strong>PARTITION TEST</strong> back <strong>OFF</strong>. The DTN engine immediately offloads all stored bundles over WebRTC channels to neighboring peers in &lt;50ms!</p>
+          </div>
+        </div>
+
+        <div class="step-card">
+          <div class="step-num">4</div>
+          <div class="step-content">
+            <h4>Multi-Hop Forwarding (Node A ↔ Node B ↔ Node C)</h4>
+            <p>If Node C is not in direct range of Node A, select <strong>Node C</strong> in the recipient dropdown (or type its ID). Node A forwards the packet to Node B, and Node B relays it directly to Node C with a <span class="dtn-tag">[2 hops]</span> verification badge!</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button id="got-it-btn" class="primary-btn" type="button">Understood, Let's Test!</button>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
+
